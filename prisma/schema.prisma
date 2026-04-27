@@ -1,0 +1,134 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider  = "postgresql"
+  url       = env("DATABASE_URL")
+  directUrl = env("DIRECT_DATABASE_URL")
+}
+
+// ==================== USERS ====================
+model User {
+  id          String    @id @default(cuid())
+  email       String    @unique
+  displayName String?
+  password    String?
+  role        String    @default("agent") // admin, agent, viewer
+  isActive    Boolean   @default(true)
+  isApproved  Boolean   @default(false) // new accounts need admin approval
+  lastLogin   DateTime?
+  avatar      String?
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+
+  campaigns Campaign[]
+}
+
+// ==================== CONTACTS ====================
+model Contact {
+  id              String   @id @default(cuid())
+  name            String   @default("")
+  phone           String   @unique
+  tags            String   @default("")
+  source          String   @default("organic")
+  assignedAgent   String   @default("")
+  notes           String   @default("")
+  lastInteraction DateTime?
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  conversations Conversation[]
+  messages       Message[]
+}
+
+// ==================== CONVERSATIONS ====================
+model Conversation {
+  id                String   @id @default(cuid())
+  contactPhone      String
+  status            String   @default("open") // open, pending, closed
+  assignedAgent     String   @default("")
+  tags              String   @default("")
+  lastMessagePreview String  @default("")
+  lastMessageAt     DateTime?
+  messageCount      Int      @default(0)
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
+
+  contact    Contact  @relation(fields: [contactPhone], references: [phone])
+  messages   Message[]
+}
+
+// ==================== MESSAGES ====================
+model Message {
+  id              String   @id @default(cuid())
+  waMessageId     String   @default("")
+  conversationId  String
+  contactPhone    String
+  direction       String   @default("inbound") // inbound, outbound
+  messageType     String   @default("text") // text, image, video, audio, document, sticker, template, interactive
+  content         String   @default("")
+  mediaUrl        String   @default("")
+  mediaId         String   @default("") // raw media ID from WhatsApp API
+  status          String   @default("sent") // sent, delivered, read, failed
+  timestamp       DateTime @default(now())
+  sentBy          String   @default("")
+
+  conversation Conversation @relation(fields: [conversationId], references: [id])
+  contact      Contact      @relation(fields: [contactPhone], references: [phone])
+}
+
+// ==================== CAMPAIGNS ====================
+model Campaign {
+  id                    String   @id @default(cuid())
+  campaignName          String
+  templateName          String
+  templateLanguage      String   @default("en")
+  segmentTags           String   @default("")
+  segmentLastInteraction String  @default("")
+  status                String   @default("draft") // draft, scheduled, running, completed, failed
+  scheduledAt           DateTime?
+  totalRecipients       Int      @default(0)
+  sentCount             Int      @default(0)
+  failedCount           Int      @default(0)
+  createdBy             String
+  createdAt             DateTime @default(now())
+  updatedAt             DateTime @updatedAt
+
+  creator     User          @relation(fields: [createdBy], references: [email])
+  campaignLogs CampaignLog[]
+}
+
+// ==================== CAMPAIGN LOGS ====================
+model CampaignLog {
+  id           String   @id @default(cuid())
+  campaignId   String
+  contactPhone String
+  waMessageId  String   @default("")
+  status       String   @default("pending") // pending, sent, failed
+  errorMessage String   @default("")
+  timestamp    DateTime @default(now())
+
+  campaign    Campaign    @relation(fields: [campaignId], references: [id])
+}
+
+// ==================== AUTOMATION RULES ====================
+model AutomationRule {
+  id               String   @id @default(cuid())
+  name             String
+  triggerType      String   @default("new_message") // new_message, tag_added, status_changed
+  triggerCondition String   @default("")
+  actionType       String   @default("add_tag") // add_tag, send_template, assign_agent, update_status
+  actionParams     String   @default("{}")
+  priority         Int      @default(10)
+  isActive         Boolean  @default(true)
+  continueOnMatch  Boolean  @default(false)
+  createdAt        DateTime @default(now())
+  updatedAt        DateTime @updatedAt
+}
+
+// ==================== SETTINGS ====================
+model Settings {
+  key   String @id
+  value String @default("")
+}
