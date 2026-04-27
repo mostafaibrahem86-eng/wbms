@@ -5,7 +5,7 @@ const JWT_SECRET = new TextEncoder().encode('whatsapp-business-manager-secret-ke
 const COOKIE_NAME = 'wbms_token';
 
 // Routes that don't require authentication
-const publicRoutes = ['/login', '/api/auth/register', '/api/auth/login', '/api/auth/forgot-password'];
+const publicRoutes = ['/login', '/api/auth/register', '/api/auth/login', '/api/auth/forgot-password', '/api/webhook', '/api/init'];
 
 // API routes that are always public (method-aware)
 const publicApiRoutes = ['/api/auth/'];
