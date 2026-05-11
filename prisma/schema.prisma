@@ -1,0 +1,224 @@
+// ============================================
+// WBMS - WhatsApp Business Management System
+// Database Schema
+// ============================================
+// Production: Supabase (PostgreSQL)
+// ============================================
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// ------------------------------------------
+// Users & Authentication
+// ------------------------------------------
+
+model User {
+  id           String   @id @default(cuid())
+  email        String   @unique
+  name         String
+  password     String?
+  role         String   @default("agent") // admin, agent, viewer
+  isActive     Boolean  @default(true)
+  isApproved   Boolean  @default(true)
+  avatar       String?
+  phone        String?
+  lastLogin    DateTime?
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  campaigns         Campaign[]
+  agentContacts     Contact[]          @relation("AgentContacts")
+  agentConversations Conversation[]    @relation("AgentConversations")
+  sentMessages      Message[]          @relation("SentMessages")
+}
+
+// ------------------------------------------
+// Contacts
+// ------------------------------------------
+
+model Contact {
+  id              String   @id @default(cuid())
+  name            String
+  phone           String   @unique
+  email           String?
+  city            String?
+  tags            String   @default("")
+  source          String   @default("manual")
+  status          String   @default("active") // active, lead, prospect, customer, vip, inactive, blocked
+  assignedAgentId String?
+  assignedAgent   User?    @relation("AgentContacts", fields: [assignedAgentId], references: [id], onDelete: SetNull)
+  notes           String   @default("")
+  isBlocked       Boolean  @default(false)
+  optedOut        Boolean  @default(false)
+  lastInteraction DateTime?
+  lastCampaignSentAt DateTime?
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  conversations Conversation[]
+  campaignLogs  CampaignLog[]
+}
+
+// ------------------------------------------
+// Conversations
+// ------------------------------------------
+
+model Conversation {
+  id                String   @id @default(cuid())
+  contactId         String
+  contact           Contact  @relation(fields: [contactId], references: [id], onDelete: Cascade)
+  contactPhone      String
+  status            String   @default("open")
+  assignedAgentId   String?
+  assignedAgent     User?    @relation("AgentConversations", fields: [assignedAgentId], references: [id], onDelete: SetNull)
+  tags              String   @default("")
+  isRead            Boolean  @default(false)
+  lastMessagePreview String  @default("")
+  lastMessageAt     DateTime?
+  messageCount      Int      @default(0)
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
+
+  messages Message[]
+}
+
+// ------------------------------------------
+// Messages
+// ------------------------------------------
+
+model Message {
+  id             String   @id @default(cuid())
+  conversationId String
+  conversation   Conversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+  contactPhone   String
+  direction      String   @default("inbound")
+  messageType    String   @default("text")
+  content        String?
+  mediaUrl       String?
+  mediaId        String?
+  fileName       String?
+  waMessageId    String?
+  status         String   @default("sent")
+  sentById       String?
+  sentBy         User?    @relation("SentMessages", fields: [sentById], references: [id], onDelete: SetNull)
+  timestamp      DateTime @default(now())
+  createdAt      DateTime @default(now())
+
+  // V3: WhatsApp Web-like message actions
+  replyToId      String?
+  replyTo        Message?  @relation("MessageReplies", fields: [replyToId], references: [id], onDelete: SetNull)
+  replies        Message[] @relation("MessageReplies")
+  isPinned       Boolean  @default(false)
+  isStarred      Boolean  @default(false)
+  note           String   @default("")
+  reaction       String?
+}
+
+// ------------------------------------------
+// Campaigns
+// ------------------------------------------
+
+model Campaign {
+  id               String   @id @default(cuid())
+  name             String
+  description      String   @default("")
+  templateId       String?
+  templateName     String
+  templateLanguage String   @default("en")
+  templateParams   String   @default("{}")
+  segmentTags      String   @default("")
+  segmentStatuses  String   @default("")
+  template         Template? @relation(fields: [templateId], references: [id], onDelete: SetNull)
+  status           String   @default("draft")
+  scheduledAt      DateTime?
+  startedAt        DateTime?
+  completedAt      DateTime?
+  totalRecipients  Int      @default(0)
+  sentCount        Int      @default(0)
+  deliveredCount   Int      @default(0)
+  readCount        Int      @default(0)
+  failedCount      Int      @default(0)
+  progressCurrent  Int      @default(0)
+  createdById      String
+  createdBy        User     @relation(fields: [createdById], references: [id], onDelete: Cascade)
+  createdAt        DateTime @default(now())
+  updatedAt        DateTime @updatedAt
+
+  logs CampaignLog[]
+}
+
+// ------------------------------------------
+// Campaign Logs
+// ------------------------------------------
+
+model CampaignLog {
+  id           String   @id @default(cuid())
+  campaignId   String
+  campaign     Campaign @relation(fields: [campaignId], references: [id], onDelete: Cascade)
+  contactPhone String
+  contact      Contact  @relation(fields: [contactPhone], references: [phone], onDelete: Cascade)
+  waMessageId  String?
+  status       String   @default("pending")
+  errorMessage String?
+  deliveredAt  DateTime?
+  readAt       DateTime?
+  timestamp    DateTime @default(now())
+
+  @@unique([campaignId, contactPhone])
+}
+
+// ------------------------------------------
+// Automation Rules
+// ------------------------------------------
+
+model AutomationRule {
+  id               String   @id @default(cuid())
+  name             String
+  description      String   @default("")
+  triggerType      String
+  triggerCondition String
+  actionType       String
+  actionParams     String   @default("{}")
+  priority         Int      @default(0)
+  isActive         Boolean  @default(true)
+  continueOnMatch  Boolean  @default(false)
+  createdAt        DateTime @default(now())
+  updatedAt        DateTime @updatedAt
+}
+
+// ------------------------------------------
+// Templates
+// ------------------------------------------
+
+model Template {
+  id          String   @id @default(cuid())
+  name        String   @unique
+  status      String   @default("DRAFT")
+  language    String   @default("en")
+  category    String   @default("UTILITY")
+  headerType  String   @default("text")
+  headerText  String   @default("")
+  bodyText    String   @default("")
+  footerText  String   @default("")
+  buttonsJson String   @default("[]")
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  campaigns Campaign[]
+}
+
+// ------------------------------------------
+// Settings (Key-Value Store)
+// ------------------------------------------
+
+model Settings {
+  key   String @id
+  value String @default("")
+  updatedAt DateTime @updatedAt
+}
